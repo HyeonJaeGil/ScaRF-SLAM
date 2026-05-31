@@ -28,6 +28,8 @@ ScaRF-SLAM is a dense visual mapping framework that combines the robustness of c
 - [🔀 Multi-Session Mapping](#-multi-session-mapping)
 - [⚙️ Configuration](#-configuration)
 - [📐 Evaluation](#-evaluation)
+- [📄 License](#-license)
+- [📚 Citation](#-citation)
 
 ## 🎬 Preview 
 
@@ -71,6 +73,11 @@ output.sky = metric_output.sky
 ```bash
 pip install rosbags open3d gtsam vismatch
 ```
+
+- [`rosbags`](https://ternaris.gitlab.io/rosbags/): pure-Python library for reading and writing ROS bag files.
+- [`open3d`](https://www.open3d.org/): library for 3D data processing and visualization.
+- [`gtsam`](https://gtsam.org/): factor-graph optimization library for robotics and computer vision.
+- [`vismatch`](https://pypi.org/project/vismatch/): unified API for image matching models.
 
 ### (Optional) Install OV-SLAM
 
@@ -232,7 +239,7 @@ ros2 launch launch/run_ov_slam.launch.py \
   output_path:=$OUTPUT_FOLDER
 ```
 
-📄 The SLAM bag will automatically be saved to `$OUTPUT_FOLDER/ov_slam/ov_slam_bag` after a few seconds of inactivity once no new data is received.
+💾 The SLAM bag will automatically be saved to `$OUTPUT_FOLDER/ov_slam/ov_slam_bag` after a few seconds of inactivity once no new data is received.
 
 In terminal 2:
 
@@ -454,3 +461,16 @@ python3 scripts/eval_utils/compare_pts.py \
   --chunk-m 10.0 \
   --recall --icp
 ```
+
+
+## 📄 License
+
+This project is released under the [GNU GPL v3.0](./LICENSE). For third-party dependency licenses, refer to the repositories and packages listed in the [Environment Setup](#-environment-setup) section.
+
+For commercial purposes, please contact the authors.
+
+## 📚 Citation
+
+If you find ScaRF-SLAM useful for your research, please consider citing:
+
+**TODO: Add citation bibtex**
