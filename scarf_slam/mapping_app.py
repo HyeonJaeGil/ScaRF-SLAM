@@ -52,6 +52,7 @@ from scarf_slam.core.camera import (
 from scarf_slam.utils.pointcloud_ops import (
     depth_to_world_points_vectorized,
     submap_to_world_pointcloud,
+    voxel_downsample_xyzrgb,
     world_points_to_anchor_local,
 )
 from scarf_slam.mapping import graph_io
@@ -162,6 +163,7 @@ class ScaRFSLAM():
         self.ros2_images_publisher = None
         self.publish_ros2_pointcloud = False
         self.ros2_pointcloud_downsample_ratio = 0.0
+        self.ros2_pointcloud_voxel_size_m = 0.0
         self.ros2_pointcloud_topic = "/scarf_slam/clouds"
         self.ros2_pointcloud_frame_id = "map"
         self.ros2_path_topic = "/scarf_slam/slam_poses"
@@ -430,6 +432,14 @@ class ScaRFSLAM():
                 "Sampled global point/color size mismatch for ROS2 point cloud publish: "
                 f"points={sampled_points.shape[0]}, colors={sampled_colors_global.shape[0]}"
             )
+        if self.ros2_pointcloud_voxel_size_m > 0.0:
+            sampled_points, sampled_colors_global = voxel_downsample_xyzrgb(
+                sampled_points,
+                sampled_colors_global,
+                voxel_size_m=self.ros2_pointcloud_voxel_size_m,
+            )
+            if sampled_points.shape[0] == 0:
+                return
 
         sampled_points = np.ascontiguousarray(sampled_points.astype(np.float32, copy=False))
         sampled_colors_global = np.ascontiguousarray(sampled_colors_global.astype(np.uint8, copy=False))
@@ -1739,6 +1749,9 @@ class ScaRFSLAM():
         self.ros2_pointcloud_downsample_ratio = float(
             self.config.get("ros2_pointcloud_downsample_ratio", 0.05)
         )
+        self.ros2_pointcloud_voxel_size_m = float(
+            self.config.get("ros2_pointcloud_voxel_size_m", 0.0)
+        )
         self.ros2_pointcloud_frame_id = self.config.get("ros2_pointcloud_frame_id", "map")
         self.ros2_pointcloud_topic = self.config.get("ros2_pointcloud_topic", "/scarf_slam/clouds")
         self.ros2_path_topic = self.config.get("ros2_path_topic", "/scarf_slam/slam_poses")
@@ -1754,6 +1767,16 @@ class ScaRFSLAM():
         ):
             raise ValueError(
                 "ros2_pointcloud_downsample_ratio must be between 0 and 1 when publish_ros2_pointcloud is enabled"
+            )
+        if (
+            self.publish_ros2_pointcloud
+            and (
+                not math.isfinite(self.ros2_pointcloud_voxel_size_m)
+                or self.ros2_pointcloud_voxel_size_m < 0.0
+            )
+        ):
+            raise ValueError(
+                "ros2_pointcloud_voxel_size_m must be non-negative when publish_ros2_pointcloud is enabled"
             )
         self._setup_ros2_publisher()
         self.recon_save_folder_name = f"{self.config.get('trajectory')}"

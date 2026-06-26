@@ -7,6 +7,52 @@ from scarf_slam.core.pose import MappingPose, MappingTransforms
 from scarf_slam.core.submap import SubmapRecord
 
 
+def voxel_downsample_xyzrgb(
+    points: np.ndarray,
+    colors: np.ndarray,
+    voxel_size_m: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    if not np.isfinite(voxel_size_m):
+        raise ValueError("voxel_size_m must be finite")
+
+    points = np.asarray(points, dtype=np.float32)
+    colors = np.asarray(colors, dtype=np.uint8)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError(f"points must have shape (N, 3), got {points.shape}")
+    if colors.ndim != 2 or colors.shape[1] != 3:
+        raise ValueError(f"colors must have shape (N, 3), got {colors.shape}")
+    if points.shape[0] != colors.shape[0]:
+        raise ValueError(
+            f"Point/color count mismatch: points={points.shape[0]}, colors={colors.shape[0]}"
+        )
+    if points.shape[0] == 0 or voxel_size_m <= 0.0:
+        return np.ascontiguousarray(points), np.ascontiguousarray(colors)
+
+    finite_mask = np.isfinite(points).all(axis=1)
+    if not np.any(finite_mask):
+        return (
+            np.empty((0, 3), dtype=np.float32),
+            np.empty((0, 3), dtype=np.uint8),
+        )
+
+    finite_points = points[finite_mask]
+    finite_colors = colors[finite_mask].astype(np.float32)
+    voxel_coords = np.floor(finite_points / np.float32(voxel_size_m)).astype(np.int64)
+    _, inverse, counts = np.unique(voxel_coords, axis=0, return_inverse=True, return_counts=True)
+
+    sampled_points = np.zeros((counts.shape[0], 3), dtype=np.float32)
+    sampled_colors = np.zeros((counts.shape[0], 3), dtype=np.float32)
+    np.add.at(sampled_points, inverse, finite_points)
+    np.add.at(sampled_colors, inverse, finite_colors)
+    sampled_points /= counts[:, None]
+    sampled_colors /= counts[:, None]
+
+    return (
+        np.ascontiguousarray(sampled_points.astype(np.float32, copy=False)),
+        np.ascontiguousarray(np.rint(sampled_colors).clip(0, 255).astype(np.uint8)),
+    )
+
+
 def depth_to_world_points_vectorized(depth, intrinsics, extrinsics, device=None):
     """
     Convert a batch of depth maps to world-frame points.

@@ -28,6 +28,7 @@ publish_ros2_pointcloud: true
 publish_ros2_path: true
 publish_ros2_images: true
 ros2_pointcloud_downsample_ratio: 0.05
+ros2_pointcloud_voxel_size_m: 0.01
 ros2_pointcloud_topic: /scarf_slam/clouds
 ros2_path_topic: /scarf_slam/slam_poses
 ros2_prev_path_topic: /scarf_slam/slam_poses_prev
