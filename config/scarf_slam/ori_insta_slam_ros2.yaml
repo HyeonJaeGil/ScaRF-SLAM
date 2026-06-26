@@ -27,6 +27,7 @@ overlap_ref_views: 1
 publish_ros2_pointcloud: true
 publish_ros2_path: true
 publish_ros2_images: true
+publish_ros2_tf: true
 ros2_pointcloud_downsample_ratio: 0.05
 ros2_pointcloud_voxel_size_m: 0.01
 ros2_pointcloud_topic: /scarf_slam/clouds
@@ -34,6 +35,8 @@ ros2_path_topic: /scarf_slam/slam_poses
 ros2_prev_path_topic: /scarf_slam/slam_poses_prev
 ros2_images_topic: /scarf_slam/images
 ros2_pointcloud_frame_id: map
+ros2_tf_parent_frame_id: map
+ros2_tf_camera_frame_id: scarf_slam/cam0
 
 pinhole_intrinsics: [463.99945, 463.25045, 400, 300]
 pinhole_resolution: [800, 600]

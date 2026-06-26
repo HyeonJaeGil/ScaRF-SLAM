@@ -84,12 +84,14 @@ from scarf_slam.integrations.ros2_publishing import (
     PathMsg,
     PointCloud2,
     PoseStamped,
+    TransformBroadcaster,
     create_qos_profile,
     ensure_ros2_available,
     point_cloud_xyzrgb,
     rclpy,
     set_ros_header_stamp,
     timestamp_plus_seconds,
+    transform_stamped_from_mapping_pose,
 )
 try:
     from scarf_slam.backends import depthanything as depthanything_insta
@@ -161,11 +163,15 @@ class ScaRFSLAM():
         self.ros2_path_publisher = None
         self.ros2_prev_path_publisher = None
         self.ros2_images_publisher = None
+        self.ros2_tf_broadcaster = None
         self.publish_ros2_pointcloud = False
+        self.publish_ros2_tf = False
         self.ros2_pointcloud_downsample_ratio = 0.0
         self.ros2_pointcloud_voxel_size_m = 0.0
         self.ros2_pointcloud_topic = "/scarf_slam/clouds"
         self.ros2_pointcloud_frame_id = "map"
+        self.ros2_tf_parent_frame_id = "map"
+        self.ros2_tf_camera_frame_id = "scarf_slam/cam0"
         self.ros2_path_topic = "/scarf_slam/slam_poses"
         self.ros2_prev_path_topic = "/scarf_slam/slam_poses_prev"
         self.publish_ros2_images = False
@@ -373,12 +379,14 @@ class ScaRFSLAM():
             not self.publish_ros2_pointcloud
             and not self.publish_ros2_path
             and not self.publish_ros2_images
+            and not self.publish_ros2_tf
         ):
             return
         ensure_ros2_available(
             publish_pointcloud=self.publish_ros2_pointcloud,
             publish_path=self.publish_ros2_path,
             publish_images=self.publish_ros2_images,
+            publish_tf=self.publish_ros2_tf,
         )
         if not rclpy.ok():
             rclpy.init(args=None)
@@ -408,6 +416,8 @@ class ScaRFSLAM():
                     self.ros2_images_topic,
                     qos_profile,
                 )
+            if self.publish_ros2_tf:
+                self.ros2_tf_broadcaster = TransformBroadcaster(self.ros2_node)
 
 
     def _publish_sampled_global_pointcloud(self, header_timestamp: Optional[MappingTimestamp] = None) -> None:
@@ -498,9 +508,51 @@ class ScaRFSLAM():
         rclpy.spin_once(self.ros2_node, timeout_sec=0.0)
 
 
+    def _select_latest_camera_tf_pose(
+        self,
+        header_timestamp: Optional[MappingTimestamp] = None,
+    ) -> Optional[Tuple[str, MappingPose]]:
+        if not self.out_ph_poses_dict:
+            return None
+        sorted_keys = sorted(self.out_ph_poses_dict.keys())
+        if header_timestamp is None:
+            ts_key = sorted_keys[-1]
+            return ts_key, self.out_ph_poses_dict[ts_key]
+
+        header_key = f"{int(header_timestamp.sec):010d}_{int(header_timestamp.nsec):09d}"
+        idx = bisect_right(sorted_keys, header_key) - 1
+        if idx < 0:
+            idx = len(sorted_keys) - 1
+        ts_key = sorted_keys[idx]
+        return ts_key, self.out_ph_poses_dict[ts_key]
+
+
+    def _publish_latest_camera_tf(self, header_timestamp: Optional[MappingTimestamp] = None) -> None:
+        if not self.publish_ros2_tf:
+            return
+        if self.ros2_tf_broadcaster is None or self.ros2_node is None:
+            raise RuntimeError("ROS2 TF broadcaster is not initialized")
+
+        selected_pose = self._select_latest_camera_tf_pose(header_timestamp)
+        if selected_pose is None:
+            return
+        ts_key, pose = selected_pose
+        sec_str, nsec_str = ts_key.split("_", 1)
+        transform_timestamp = MappingTimestamp(int(sec_str), int(nsec_str))
+        transform_msg = transform_stamped_from_mapping_pose(
+            pose,
+            parent_frame_id=self.ros2_tf_parent_frame_id,
+            child_frame_id=self.ros2_tf_camera_frame_id,
+            timestamp=transform_timestamp,
+        )
+        self.ros2_tf_broadcaster.sendTransform(transform_msg)
+        rclpy.spin_once(self.ros2_node, timeout_sec=0.0)
+
+
     def _publish_loaded_previous_session(self, header_timestamp: MappingTimestamp) -> None:
         self._publish_sampled_global_pointcloud(header_timestamp=header_timestamp)
         self._publish_out_ph_poses_path(header_timestamp=header_timestamp)
+        self._publish_latest_camera_tf(header_timestamp=header_timestamp)
 
 
     def _publish_processed_images(self, processed_images: np.ndarray, header_timestamp: Optional[MappingTimestamp] = None) -> None:
@@ -1746,6 +1798,7 @@ class ScaRFSLAM():
         self.publish_ros2_pointcloud = self.config.get("publish_ros2_pointcloud", False)
         self.publish_ros2_path = self.config.get("publish_ros2_path", False)
         self.publish_ros2_images = self.config.get("publish_ros2_images", False)
+        self.publish_ros2_tf = self.config.get("publish_ros2_tf", False)
         self.ros2_pointcloud_downsample_ratio = float(
             self.config.get("ros2_pointcloud_downsample_ratio", 0.05)
         )
@@ -1753,6 +1806,8 @@ class ScaRFSLAM():
             self.config.get("ros2_pointcloud_voxel_size_m", 0.0)
         )
         self.ros2_pointcloud_frame_id = self.config.get("ros2_pointcloud_frame_id", "map")
+        self.ros2_tf_parent_frame_id = self.config.get("ros2_tf_parent_frame_id", self.ros2_pointcloud_frame_id)
+        self.ros2_tf_camera_frame_id = self.config.get("ros2_tf_camera_frame_id", "scarf_slam/cam0")
         self.ros2_pointcloud_topic = self.config.get("ros2_pointcloud_topic", "/scarf_slam/clouds")
         self.ros2_path_topic = self.config.get("ros2_path_topic", "/scarf_slam/slam_poses")
         self.ros2_prev_path_topic = self.config.get("ros2_prev_path_topic", "/scarf_slam/slam_poses_prev")
@@ -1874,6 +1929,7 @@ class ScaRFSLAM():
                 header_timestamp = MappingTimestamp(int(sec_str), int(nsec_str))
                 self._publish_sampled_global_pointcloud(header_timestamp=header_timestamp)
                 self._publish_out_ph_poses_path(header_timestamp=header_timestamp)
+                self._publish_latest_camera_tf(header_timestamp=header_timestamp)
 
                 # self.covisibility_graph.plot_trajectory_covisibility(
                 #     pose_dict=self.out_ph_poses_dict,
@@ -2002,6 +2058,7 @@ class ScaRFSLAM():
             header_timestamp = ph_view_poses_sub[-1][0]
             self._publish_sampled_global_pointcloud(header_timestamp=header_timestamp)
             self._publish_out_ph_poses_path(header_timestamp=header_timestamp)
+            self._publish_latest_camera_tf(header_timestamp=header_timestamp)
             self._publish_processed_images(predictions.processed_images, header_timestamp=header_timestamp)
 
             del predictions
