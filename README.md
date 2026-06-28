@@ -298,7 +298,7 @@ Each completed mapping session writes a graph artifact under:
 $SESSION_FOLDER/recon/<trajectory>/opt_graph_<suffix>
 ```
 
-Pass this directory to `--prev_slam_folder` when extending a map. You can also pass the previous session folder itself if it contains exactly one `recon/*/opt_graph*/manifest.json`; if multiple graph artifacts exist, pass the exact graph directory.
+Pass this directory to `--prev_mapping_graph` when extending a map. You can also pass the previous session folder itself if it contains exactly one `recon/*/opt_graph*/manifest.json`; if multiple graph artifacts exist, pass the exact graph directory.
 
 ⚠️ The current implementation assumes that all timestamps in the previous session are earlier than the first timestamp in the new session.
 
@@ -350,7 +350,7 @@ Load the first session's ScaRF-SLAM graph when running mapping for the second se
 python3 run_mapping.py \
   --slam_folder $SESSION_TWO_FOLDER \
   --input_bag $SESSION_TWO_FOLDER/ov_slam/ov_slam_bag \
-  --prev_slam_folder $SESSION_ONE_FOLDER/recon/ov_slam/opt_graph_<suffix> \
+  --prev_mapping_graph $SESSION_ONE_FOLDER/recon/ov_slam/opt_graph_<suffix> \
   --config config/scarf_slam/ori_insta_slam.yaml
 ```
 

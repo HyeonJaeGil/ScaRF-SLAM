@@ -140,10 +140,20 @@ def _require_cuda():
 
 
 class ScaRFSLAM():
-    def __init__(self, slam_folder, input_bag=None, prev_slam_folder=None, image_folder=None, poses=None):
+    def __init__(
+        self,
+        slam_folder,
+        input_bag=None,
+        prev_mapping_graph=None,
+        image_folder=None,
+        poses=None,
+        prev_slam_folder=None,
+    ):
+        if prev_mapping_graph is None:
+            prev_mapping_graph = prev_slam_folder
         self.slam_folder = slam_folder
         self.input_bag = input_bag
-        self.prev_slam_folder = prev_slam_folder
+        self.prev_mapping_graph = prev_mapping_graph
         self.image_folder = image_folder
         self.poses = poses
 
@@ -589,8 +599,8 @@ class ScaRFSLAM():
         rclpy.spin_once(self.ros2_node, timeout_sec=0.0)
 
 
-    def _resolve_prev_graph_dir(self, prev_slam_folder: Union[str, Path]) -> Path:
-        root = Path(prev_slam_folder)
+    def _resolve_prev_graph_dir(self, prev_mapping_graph: Union[str, Path]) -> Path:
+        root = Path(prev_mapping_graph)
         if (root / "manifest.json").exists():
             return root
 
@@ -619,9 +629,9 @@ class ScaRFSLAM():
 
     def _previous_graph_timestamps_nsec(
         self,
-        prev_slam_folder: Union[str, Path],
+        prev_mapping_graph: Union[str, Path],
     ) -> Tuple[Set[int], Set[int]]:
-        graph_dir = self._resolve_prev_graph_dir(prev_slam_folder)
+        graph_dir = self._resolve_prev_graph_dir(prev_mapping_graph)
         manifest = graph_io.load_graph_manifest(graph_dir)
         frames_json = graph_io.require_graph_key(manifest, "frames", "Previous graph manifest")
         if not isinstance(frames_json, dict):
@@ -999,8 +1009,8 @@ class ScaRFSLAM():
         return frame_keys
 
 
-    def _load_prev_graph(self, prev_slam_folder: Union[str, Path]) -> Path:
-        graph_dir = self._resolve_prev_graph_dir(prev_slam_folder)
+    def _load_prev_graph(self, prev_mapping_graph: Union[str, Path]) -> Path:
+        graph_dir = self._resolve_prev_graph_dir(prev_mapping_graph)
         manifest = graph_io.load_graph_manifest(graph_dir)
         loaded_submaps = self._load_graph_submaps(graph_dir, manifest)
         loaded_ph_to_ref = self._load_graph_ph_to_ref(manifest)
@@ -1571,7 +1581,7 @@ class ScaRFSLAM():
         self.config_filename = str(config_path)
         self.model_name = self.config.get("model_name")
         self.is_mono = bool(self.config.get("is_mono", False))
-        if self.is_mono and self.prev_slam_folder is not None:
+        if self.is_mono and self.prev_mapping_graph is not None:
             raise ValueError(
                 "Multi-session mode not supported for monocular only yet"
             )
@@ -1654,7 +1664,7 @@ class ScaRFSLAM():
             )
 
         previous_image_timestamps_nsec: Set[int] = set()
-        if self.prev_slam_folder is not None:
+        if self.prev_mapping_graph is not None:
             current_session_start_nsec = read_current_session_start_image_timestamp_nsec(
                 input_bag_for_sync,
                 image_topic=slam_image_topic,
@@ -1662,7 +1672,7 @@ class ScaRFSLAM():
             (
                 previous_image_timestamps_nsec,
                 previous_data_timestamps_nsec,
-            ) = self._previous_graph_timestamps_nsec(self.prev_slam_folder)
+            ) = self._previous_graph_timestamps_nsec(self.prev_mapping_graph)
             self._validate_previous_graph_before_current_session(
                 previous_data_timestamps_nsec=previous_data_timestamps_nsec,
                 current_session_start_nsec=current_session_start_nsec,
@@ -1703,7 +1713,7 @@ class ScaRFSLAM():
             f"{sync_result.current_session_skipped_pose_timestamps}"
             f"{ANSI_RESET}"
         )
-        if self.prev_slam_folder is not None:
+        if self.prev_mapping_graph is not None:
             previous_skipped_color = (
                 ANSI_GREEN
                 if sync_result.previous_session_skipped_pose_timestamps == 0
@@ -1847,9 +1857,9 @@ class ScaRFSLAM():
         self.overlap_ph_views = self.overlap_ref_views * self.num_ph_views_per_ref_pose
 
         # --- load previous graph ---
-        if self.prev_slam_folder is not None:
-            print(f"Load previous session graph from {self.prev_slam_folder}")
-            self._load_prev_graph(self.prev_slam_folder)
+        if self.prev_mapping_graph is not None:
+            print(f"Load previous mapping graph from {self.prev_mapping_graph}")
+            self._load_prev_graph(self.prev_mapping_graph)
             header_timestamp = timestamp_key_to_timestamp(self.ref_timestamps[0])
             self._publish_loaded_previous_session(
                 header_timestamp=header_timestamp,
@@ -2621,7 +2631,8 @@ class ScaRFSLAM():
             "description": "ScaRF-SLAM global optimization graph artifact.",
             "slam_folder": str(self.slam_folder),
             "input_bag": str(self.input_bag),
-            "prev_slam_folder": str(self.prev_slam_folder) if self.prev_slam_folder is not None else None,
+            "prev_mapping_graph": str(self.prev_mapping_graph) if self.prev_mapping_graph is not None else None,
+            "prev_slam_folder": str(self.prev_mapping_graph) if self.prev_mapping_graph is not None else None,
             "model_name": getattr(self, "model_name", None),
             "current_traj_timestamp": self.current_traj_timestamp,
             "num_submaps": len(self.submaps),
@@ -2870,9 +2881,19 @@ def main(args=None):
         help="Path to the mapping YAML config file.",
     )
     parser.add_argument(
-        "--prev_slam_folder",
+        "--prev_mapping_graph",
+        dest="prev_mapping_graph",
         default=None,
-        help="Optional path to the previous SLAM session folder.",
+        help=(
+            "Optional path to a previous mapping graph directory, or a session "
+            "folder containing recon/*/opt_graph*/manifest.json."
+        ),
+    )
+    parser.add_argument(
+        "--prev_slam_folder",
+        dest="prev_mapping_graph",
+        default=None,
+        help=argparse.SUPPRESS,
     )
     parsed_args = parser.parse_args(args)
     using_bag_input = parsed_args.input_bag is not None
@@ -2890,14 +2911,14 @@ def main(args=None):
         print("  image_folder:", parsed_args.image_folder)
         print("  poses:", parsed_args.poses)
     print("  config:", parsed_args.config)
-    if parsed_args.prev_slam_folder is not None:
-        print("  prev_slam_folder:", parsed_args.prev_slam_folder)
+    if parsed_args.prev_mapping_graph is not None:
+        print("  prev_mapping_graph:", parsed_args.prev_mapping_graph)
     print(" ")
 
     app = ScaRFSLAM(
         parsed_args.slam_folder,
         input_bag=parsed_args.input_bag,
-        prev_slam_folder=parsed_args.prev_slam_folder,
+        prev_mapping_graph=parsed_args.prev_mapping_graph,
         image_folder=parsed_args.image_folder,
         poses=parsed_args.poses,
     )
