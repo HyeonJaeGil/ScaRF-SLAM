@@ -47,6 +47,11 @@ launch_args = [
         description="ros2 bag play rate (1.0 = realtime speed)",
     ),
     DeclareLaunchArgument(
+        name="bag_start_offset",
+        default_value="0.0",
+        description="ros2 bag play start offset in seconds",
+    ),
+    DeclareLaunchArgument(
         name="namespace", default_value="ov_msckf", description="namespace"
     ),
     DeclareLaunchArgument(
@@ -425,6 +430,8 @@ def launch_setup(context):
             "--clock",
             "--rate",
             LaunchConfiguration("bag_rate"),
+            "--start-offset",
+            LaunchConfiguration("bag_start_offset"),
         ],
         output="screen",
     )
