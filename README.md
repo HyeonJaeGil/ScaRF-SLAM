@@ -375,6 +375,12 @@ Important fields:
 - `slam_final_trajectory_topic`: final trajectory data topic name, required for offline reconstruction.
 - `slam_image_topic`: image data topic name.
 - `is_mono`: enables monocular-only, non-metric trajectory handling. ⚠️ Due to the limited precision of the deep learning model, the trajectory scale should not be excessively small. The system rescales the mean translation magnitude of the first batch to `0.5`, stores the resulting scale factor, and applies it consistently to all subsequent input poses.
+- `da3_model`: Hugging Face model id or local model directory for Depth Anything 3. The default configs use `depth-anything/DA3-LARGE-1.1`.
+- `da3_process_res`: base DA3 inference resolution. Lower values reduce GPU memory use and output resolution; higher values increase detail and memory use.
+- `da3_process_res_method`: DA3 resize strategy, such as `upper_bound_resize` or `lower_bound_resize`.
+- `da3_ref_view_strategy`: DA3 reference-view selection strategy for multi-view inputs.
+- `da3_align_to_input_ext_scale`: aligns DA3 predictions to the provided camera-pose scale when extrinsics are available.
+- `da3_use_ray_pose`: enables DA3 ray-head pose estimation. This is usually slower, so the default is `false`.
 - `trajectory`: output subfolder name under `recon/`.
 - `sec_skip`: minimum time gap, in seconds, between selected mapping keyframes.
 - `kf_distance`: translation threshold, in meters, for keyframe selection. A frame is selected when its odometry motion from the previous selected keyframe exceeds this distance. Disabled for non-metric input trajectory.

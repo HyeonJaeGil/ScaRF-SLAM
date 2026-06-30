@@ -136,13 +136,20 @@ def do_processing(app, ts_sub, in_poses_dict, ph_views_per_batch, use_extrinsics
             image=image_data_lst,
             extrinsics=np.stack(extrinsics_lst, axis=0).astype(np.float32),
             intrinsics=intrinsics_array,
-            align_to_input_ext_scale=True,
-            ref_view_strategy="saddle_balanced",
+            align_to_input_ext_scale=app.da3_align_to_input_ext_scale,
+            process_res=app.da3_process_res,
+            process_res_method=app.da3_process_res_method,
+            use_ray_pose=app.da3_use_ray_pose,
+            ref_view_strategy=app.da3_ref_view_strategy,
         )
     else:
         predictions = app.model.inference(
             image=image_data_lst,
             intrinsics=intrinsics_array,
+            process_res=app.da3_process_res,
+            process_res_method=app.da3_process_res_method,
+            use_ray_pose=app.da3_use_ray_pose,
+            ref_view_strategy=app.da3_ref_view_strategy,
         )
 
     # if torch.cuda.is_available():

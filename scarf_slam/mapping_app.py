@@ -1805,6 +1805,12 @@ class ScaRFSLAM():
         )
 
         self.min_matches_for_edge_drop = self.config.get("min_matches_for_edge_drop", 0)
+        self.da3_model = self.config.get("da3_model", "depth-anything/DA3-LARGE-1.1")
+        self.da3_process_res = int(self.config.get("da3_process_res", 504))
+        self.da3_process_res_method = self.config.get("da3_process_res_method", "upper_bound_resize")
+        self.da3_ref_view_strategy = self.config.get("da3_ref_view_strategy", "saddle_balanced")
+        self.da3_align_to_input_ext_scale = bool(self.config.get("da3_align_to_input_ext_scale", True))
+        self.da3_use_ray_pose = bool(self.config.get("da3_use_ray_pose", False))
         self.publish_ros2_pointcloud = self.config.get("publish_ros2_pointcloud", False)
         self.publish_ros2_path = self.config.get("publish_ros2_path", False)
         self.publish_ros2_images = self.config.get("publish_ros2_images", False)
@@ -1868,7 +1874,15 @@ class ScaRFSLAM():
         # --- load model ---
         if self.model_name == "da":
             from depth_anything_3.api import DepthAnything3
-            self.model = DepthAnything3.from_pretrained("depth-anything/DA3NESTED-GIANT-LARGE").to(device=self.device)
+            print(
+                "Loading DA3 model: "
+                f"model={self.da3_model}, "
+                f"process_res={self.da3_process_res}, "
+                f"process_res_method={self.da3_process_res_method}, "
+                f"ref_view_strategy={self.da3_ref_view_strategy}, "
+                f"use_ray_pose={self.da3_use_ray_pose}"
+            )
+            self.model = DepthAnything3.from_pretrained(self.da3_model).to(device=self.device)
         else:
             raise ValueError(f"Invalid self.model_name: {self.model_name}")
 

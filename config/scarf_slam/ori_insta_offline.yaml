@@ -1,4 +1,10 @@
 model_name: da
+da3_model: depth-anything/DA3-LARGE-1.1
+da3_process_res: 504
+da3_process_res_method: upper_bound_resize
+da3_ref_view_strategy: saddle_balanced
+da3_align_to_input_ext_scale: true
+da3_use_ray_pose: false
 
 use_slam: false
 is_mono: false
